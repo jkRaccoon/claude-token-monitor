@@ -89,10 +89,18 @@ curl -fsSL https://raw.githubusercontent.com/jkRaccoon/claude-token-monitor/main
 ```
 
 This automatically:
-- Downloads source code
+- Downloads source code to `~/.claude-monitor/`
 - Installs dependencies
 - Sets up statusline wrapper (preserves your existing statusline)
 - Configures auto-launch on login
+- **Starts the app immediately** — look for the icon in your menu bar
+
+After installation, start using Claude Code normally. Rate limit data will appear in the menu bar after your first conversation.
+
+If the app is not running, you can start it manually:
+```bash
+python3 ~/.claude-monitor/claude_monitor.py &
+```
 
 Uninstall (restores original statusline):
 ```bash
@@ -223,10 +231,18 @@ curl -fsSL https://raw.githubusercontent.com/jkRaccoon/claude-token-monitor/main
 ```
 
 자동으로:
-- 소스 코드 다운로드
+- `~/.claude-monitor/`에 소스 코드 다운로드
 - 의존성 설치
 - statusline 래퍼 설정 (기존 statusline 보존)
 - 로그인 시 자동 실행 설정
+- **설치 즉시 앱 실행** — 메뉴바에 아이콘이 표시됩니다
+
+설치 후 Claude Code를 평소처럼 사용하면 됩니다. 첫 대화 후 메뉴바에 rate limit 데이터가 표시됩니다.
+
+앱이 실행되지 않은 경우 수동 실행:
+```bash
+python3 ~/.claude-monitor/claude_monitor.py &
+```
 
 제거 (원본 statusline 복원):
 ```bash
