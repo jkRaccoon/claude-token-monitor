@@ -90,6 +90,7 @@ class UsageAPI:
         self._token_provider = token_provider
         self._last_result = None
         self._request_count = 0
+        self._last_token = None
 
     @property
     def remaining_requests(self):
@@ -120,28 +121,28 @@ class UsageAPI:
         }, timeout=10)
 
     def fetch_usage(self):
-        """Usage API를 호출하여 사용량 정보를 가져온다."""
+        """Usage API를 호출하여 사용량 정보를 가져온다.
+
+        토큰 갱신은 하지 않는다. 갱신하면 Claude Code가 사용 중인
+        토큰이 무효화되어 작업이 중단될 수 있기 때문.
+        """
         token = self._token_provider.get_token()
+
+        # Claude Code가 토큰을 갱신하면 카운터 리셋
+        if token != self._last_token:
+            self._request_count = 0
+            self._last_token = token
+
         resp = self._call_api(token)
         self._request_count += 1
-
-        # 429/401 시 토큰 갱신 후 재시도
-        if resp.status_code in (401, 429):
-            try:
-                self._token_provider.force_refresh()
-                self._request_count = 0
-                new_token = self._token_provider.get_token()
-                resp = self._call_api(new_token)
-                self._request_count += 1
-            except Exception:
-                pass
 
         if resp.status_code == 401:
             raise RuntimeError("인증 실패. Claude Code에서 재인증 필요.")
         if resp.status_code == 429:
+            self._request_count = MAX_REQUESTS_PER_TOKEN
             if self._last_result:
                 return self._last_result
-            raise RuntimeError("Rate limit 초과. 잠시 후 다시 시도합니다.")
+            raise RuntimeError("Rate limit 초과. 토큰 갱신 대기 중.")
         if resp.status_code != 200:
             raise RuntimeError(f"API 오류 (HTTP {resp.status_code})")
 
