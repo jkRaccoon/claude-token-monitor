@@ -8,6 +8,9 @@ REPO="https://github.com/jkRaccoon/claude-token-monitor.git"
 INSTALL_DIR="$HOME/.claude-monitor"
 PLIST_NAME="com.local.claude-monitor.plist"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+SETTINGS_FILE="$HOME/.claude/settings.json"
+ORIGINAL_CMD_FILE="$INSTALL_DIR/.original-statusline"
+WRAPPER_CMD="sh $INSTALL_DIR/statusline-wrapper.sh"
 
 echo "🔍 Claude Token Monitor 설치를 시작합니다..."
 echo ""
@@ -20,7 +23,15 @@ if ! command -v python3 &>/dev/null; then
 fi
 echo "✅ Python3: $(python3 --version)"
 
-# 2. 기존 설치 확인
+# 2. jq 확인
+if ! command -v jq &>/dev/null; then
+    echo "❌ jq가 설치되어 있지 않습니다."
+    echo "   brew install jq 로 설치하세요."
+    exit 1
+fi
+echo "✅ jq: $(jq --version)"
+
+# 3. 소스 코드 다운로드/업데이트
 if [ -d "$INSTALL_DIR" ]; then
     echo "📦 기존 설치를 발견했습니다. 업데이트합니다..."
     cd "$INSTALL_DIR"
@@ -31,14 +42,39 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 3. 의존성 설치
+# 4. 의존성 설치
 echo "📦 의존성을 설치합니다..."
 pip3 install --quiet -r requirements.txt
 
-# 4. 실행 중인 인스턴스 종료
+# 5. statusline 래퍼 설정
+echo "🔧 statusline 래퍼를 설정합니다..."
+mkdir -p "$HOME/.claude"
+
+if [ -f "$SETTINGS_FILE" ]; then
+    # 현재 statusline command 백업
+    current_cmd=$(jq -r '.statusLine.command // empty' "$SETTINGS_FILE" 2>/dev/null)
+
+    if [ -n "$current_cmd" ] && [ "$current_cmd" != "$WRAPPER_CMD" ]; then
+        # 이미 래퍼가 아닌 경우에만 원본 저장
+        echo "$current_cmd" > "$ORIGINAL_CMD_FILE"
+        echo "   원본 statusline 백업: $current_cmd"
+    fi
+
+    # settings.json에 래퍼 설정
+    tmp=$(mktemp)
+    jq --arg cmd "$WRAPPER_CMD" '.statusLine = {"type": "command", "command": $cmd}' "$SETTINGS_FILE" > "$tmp"
+    mv "$tmp" "$SETTINGS_FILE"
+    echo "   statusline 래퍼 설정 완료"
+else
+    # settings.json이 없으면 생성
+    echo "{\"statusLine\":{\"type\":\"command\",\"command\":\"$WRAPPER_CMD\"}}" | jq . > "$SETTINGS_FILE"
+    echo "   settings.json 생성 완료"
+fi
+
+# 6. 실행 중인 인스턴스 종료
 pkill -f "python3.*claude_monitor.py" 2>/dev/null || true
 
-# 5. LaunchAgent 설정 (로그인 시 자동 실행)
+# 7. LaunchAgent 설정 (로그인 시 자동 실행)
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
 cat > "$LAUNCH_AGENTS_DIR/$PLIST_NAME" << PLIST
@@ -67,7 +103,7 @@ cat > "$LAUNCH_AGENTS_DIR/$PLIST_NAME" << PLIST
 </plist>
 PLIST
 
-# 6. LaunchAgent 로드
+# 8. LaunchAgent 로드
 launchctl unload "$LAUNCH_AGENTS_DIR/$PLIST_NAME" 2>/dev/null || true
 launchctl load "$LAUNCH_AGENTS_DIR/$PLIST_NAME"
 

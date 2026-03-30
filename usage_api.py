@@ -1,5 +1,7 @@
 """Claude Max 플랜 사용량 API 클라이언트."""
 
+import time
+
 import requests
 from datetime import datetime, timezone
 
@@ -69,6 +71,8 @@ class UsageResult:
         self.seven_day_opus = None   # UsageData (optional)
         self.seven_day_sonnet = None # UsageData (optional)
         self.extra_usage_enabled = False
+        self.is_rate_limited = False
+        self.retry_after = None
         self.raw = None
 
     @property
@@ -91,6 +95,7 @@ class UsageAPI:
         self._last_result = None
         self._request_count = 0
         self._last_token = None
+        self.rate_limited_until = 0  # unix timestamp
 
     @property
     def remaining_requests(self):
@@ -118,6 +123,7 @@ class UsageAPI:
         return requests.get(USAGE_URL, headers={
             "Authorization": f"Bearer {token}",
             "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-code/2.1.87",
         }, timeout=10)
 
     def fetch_usage(self):
@@ -140,11 +146,16 @@ class UsageAPI:
             raise RuntimeError("인증 실패. Claude Code에서 재인증 필요.")
         if resp.status_code == 429:
             self._request_count = MAX_REQUESTS_PER_TOKEN
+            retry_after = int(resp.headers.get("Retry-After", 300))
+            self.rate_limited_until = time.time() + retry_after
             if self._last_result:
+                self._last_result.is_rate_limited = True
                 return self._last_result
-            raise RuntimeError("Rate limit 초과. 토큰 갱신 대기 중.")
+            raise RuntimeError(f"Rate limit (재시도: {retry_after}초)")
         if resp.status_code != 200:
             raise RuntimeError(f"API 오류 (HTTP {resp.status_code})")
+
+        self.rate_limited_until = 0
 
         data = resp.json()
         result = UsageResult()
