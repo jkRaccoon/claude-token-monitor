@@ -84,6 +84,14 @@ class TokenProvider:
             raw_data.update(updated_oauth)
         self._write_keychain(raw_data)
 
+    def force_refresh(self):
+        """토큰을 강제로 갱신한다 (rate limit 등으로 새 토큰이 필요할 때)."""
+        raw_data, creds = self._get_oauth_creds()
+        new_data = self._refresh_token(creds)
+        self._update_keychain_with_new_token(raw_data, new_data)
+        self._cached_token = new_data["access_token"]
+        self._cached_token_expires = time.time() + new_data.get("expires_in", 28800) - 300
+
     def get_token(self):
         """유효한 access token을 반환한다."""
         # 메모리 캐시 확인

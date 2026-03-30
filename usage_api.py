@@ -103,18 +103,30 @@ class UsageAPI:
                 pass
         return UsageData(utilization, resets_at)
 
-    def fetch_usage(self):
-        """Usage API를 호출하여 사용량 정보를 가져온다."""
-        token = self._token_provider.get_token()
-        resp = requests.get(USAGE_URL, headers={
+    def _call_api(self, token):
+        """Usage API를 호출한다."""
+        return requests.get(USAGE_URL, headers={
             "Authorization": f"Bearer {token}",
             "anthropic-beta": "oauth-2025-04-20",
         }, timeout=10)
 
+    def fetch_usage(self):
+        """Usage API를 호출하여 사용량 정보를 가져온다."""
+        token = self._token_provider.get_token()
+        resp = self._call_api(token)
+
+        # 429/401 시 토큰 갱신 후 재시도
+        if resp.status_code in (401, 429):
+            try:
+                self._token_provider.force_refresh()
+                new_token = self._token_provider.get_token()
+                resp = self._call_api(new_token)
+            except Exception:
+                pass
+
         if resp.status_code == 401:
             raise RuntimeError("인증 실패. Claude Code에서 재인증 필요.")
         if resp.status_code == 429:
-            # 캐시된 결과가 있으면 반환
             if self._last_result:
                 return self._last_result
             raise RuntimeError("Rate limit 초과. 잠시 후 다시 시도합니다.")
