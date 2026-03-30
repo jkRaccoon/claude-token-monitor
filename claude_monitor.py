@@ -2,17 +2,20 @@
 
 데이터 소스 (하이브리드):
   1. Primary: Claude Code statusline → /tmp/claude-rate-limits.json (5초 간격)
-  2. Fallback: 키체인 토큰(읽기 전용) → Usage API (stale 시 60초 간격)
+  2. Fallback: 키체인 토큰(읽기 전용) → Usage API (stale 시 90초 간격)
 
 키체인 토큰은 읽기만 하므로 Claude Code 세션에 영향 없음.
 Usage API는 User-Agent: claude-code로 호출하여 rate limit 완화.
 """
 
+import os
+import plistlib
 import subprocess
 import threading
 import time
 import webbrowser
 from datetime import datetime
+from pathlib import Path
 
 import rumps
 
@@ -22,7 +25,10 @@ from usage_api import UsageAPI
 from stats_reader import StatsReader
 
 POLL_INTERVAL = 5  # 초
-API_POLL_INTERVAL = 60  # API fallback 간격 (초)
+API_POLL_INTERVAL = 90  # API fallback 간격 (초)
+
+PLIST_LABEL = "com.local.claude-monitor"
+PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_LABEL}.plist"
 
 
 def format_number(n):
@@ -121,6 +127,10 @@ class ClaudeMonitorApp(rumps.App):
         self.menu_source = rumps.MenuItem("소스: --")
         self.menu_status = rumps.MenuItem("대기 중...")
         self.menu_refresh = rumps.MenuItem("새로고침", callback=self.on_refresh)
+        self.menu_autostart = rumps.MenuItem(
+            "로그인 시 자동 시작", callback=self.on_toggle_autostart
+        )
+        self.menu_autostart.state = self._is_autostart_enabled()
         self.menu_quit = rumps.MenuItem("종료", callback=self.on_quit)
 
         self.menu.clear()
@@ -141,6 +151,7 @@ class ClaudeMonitorApp(rumps.App):
             self.menu_source,
             self.menu_status,
             self.menu_refresh,
+            self.menu_autostart,
             self.menu_quit,
         ]
 
@@ -267,6 +278,48 @@ class ClaudeMonitorApp(rumps.App):
 
         self.menu_source.title = f"소스: {source}"
         self.menu_status.title = f"마지막 갱신: {now_str}"
+
+    # ─── 자동 시작 ───
+
+    def _is_autostart_enabled(self):
+        return PLIST_PATH.exists()
+
+    def _set_autostart(self, enabled):
+        if enabled:
+            PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+            python_path = subprocess.run(
+                ["which", "python3"], capture_output=True, text=True
+            ).stdout.strip()
+            script_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "claude_monitor.py")
+            )
+            plist = {
+                "Label": PLIST_LABEL,
+                "ProgramArguments": [python_path, script_path],
+                "WorkingDirectory": os.path.dirname(script_path),
+                "RunAtLoad": True,
+                "KeepAlive": False,
+                "StandardErrorPath": "/tmp/claude-monitor.err",
+                "StandardOutPath": "/tmp/claude-monitor.out",
+            }
+            with open(PLIST_PATH, "wb") as f:
+                plistlib.dump(plist, f)
+            subprocess.run(
+                ["launchctl", "load", str(PLIST_PATH)],
+                capture_output=True,
+            )
+        else:
+            subprocess.run(
+                ["launchctl", "unload", str(PLIST_PATH)],
+                capture_output=True,
+            )
+            if PLIST_PATH.exists():
+                PLIST_PATH.unlink()
+
+    def on_toggle_autostart(self, sender):
+        new_state = not sender.state
+        self._set_autostart(new_state)
+        sender.state = new_state
 
     # ─── 액션 ───
 
