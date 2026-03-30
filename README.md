@@ -1,10 +1,147 @@
 # Claude Token Monitor
 
-macOS 메뉴바에서 Claude Max 플랜의 토큰 사용량을 실시간으로 모니터링하는 앱입니다.
+macOS menu bar app for real-time monitoring of Claude Max plan token usage.
+
+[한국어](#한국어) | English
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue)
 ![macOS](https://img.shields.io/badge/macOS-12.0+-black)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+## Screenshot
+
+**Menu bar** — 5-hour usage and time until reset at a glance
+
+```
+🟢 14% · 3h20m
+```
+
+**Click for details** — progress bars for 5-hour / 7-day usage
+
+```
+5-Hour ▓▓░░░░░░░░░░░░░ 14%
+  Resets in: 3h 20m
+  Reset at:  03/30 20:00
+───────────────────────────
+7-Day  ▓▓▓▓▓▓▓▓▓░░░░░░ 58%
+  Resets in: 3d 23h
+  Reset at:  04/03 16:00
+───────────────────────────
+Today's tokens
+  claude-opus-4-6: 173,832
+───────────────────────────
+Last 7 days: 333,534 tokens
+```
+
+## Features
+
+- **5-hour usage in menu bar** with percentage and countdown to reset
+- Color-coded status: 🟢 Normal / 🟡 Warning (50%+) / 🔴 Critical (80%+)
+- **Progress bars** for 5-hour and 7-day usage in dropdown
+- Reset times, per-model token usage, 7-day totals
+- Auto-refresh every 60 seconds
+- Automatic OAuth token refresh via refresh token
+- Setup guide UI when Claude Code is not installed
+
+## Prerequisites
+
+- **macOS 12.0+** (Apple Silicon / Intel)
+- **Claude Code CLI** installed and logged in
+- **Claude Max plan** (5x or 20x) subscription
+
+> If Claude Code is not installed, the app will show a setup guide.
+
+## Installation
+
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jkRaccoon/claude-token-monitor/main/install.sh | bash
+```
+
+Automatically downloads, installs dependencies, and sets up auto-launch on login.
+
+Uninstall:
+```bash
+curl -fsSL https://raw.githubusercontent.com/jkRaccoon/claude-token-monitor/main/uninstall.sh | bash
+```
+
+### Download .app
+
+1. Download zip from [Releases](https://github.com/jkRaccoon/claude-token-monitor/releases/latest)
+2. Unzip and copy to `/Applications/`
+3. Remove Gatekeeper flag: `xattr -cr "/Applications/Claude Monitor.app"`
+
+### Run from source
+
+```bash
+git clone https://github.com/jkRaccoon/claude-token-monitor.git
+cd claude-token-monitor
+pip3 install -r requirements.txt
+python3 claude_monitor.py
+```
+
+### Install Claude Code (if not already installed)
+
+```bash
+npm install -g @anthropic-ai/claude-code
+claude  # run and log in
+```
+
+## Auto-launch on login
+
+```bash
+cp com.local.claude-monitor.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.local.claude-monitor.plist
+```
+
+Remove:
+```bash
+launchctl unload ~/Library/LaunchAgents/com.local.claude-monitor.plist
+rm ~/Library/LaunchAgents/com.local.claude-monitor.plist
+```
+
+## Build from source
+
+```bash
+pip3 install pyinstaller
+pyinstaller --windowed --name "Claude Monitor" --osx-bundle-identifier com.local.claude-monitor claude_monitor.py
+# Creates dist/Claude Monitor.app
+```
+
+## Project structure
+
+```
+├── claude_monitor.py      # Main menu bar app (rumps)
+├── token_provider.py      # macOS Keychain OAuth token management + auto-refresh
+├── usage_api.py           # Anthropic Usage API client
+├── stats_reader.py        # Local ~/.claude/stats-cache.json parser
+├── install.sh             # One-line installer
+├── uninstall.sh           # Uninstaller
+├── setup.py               # py2app build config
+├── run.sh                 # Run script
+└── com.local.claude-monitor.plist  # LaunchAgent config
+```
+
+## How it works
+
+1. Reads **OAuth token** stored by Claude Code in macOS Keychain
+2. Queries usage via `https://api.anthropic.com/api/oauth/usage`
+3. **Auto-refreshes** expired tokens using refresh token + updates Keychain
+4. Supplements with local token stats from `~/.claude/stats-cache.json`
+
+## Notes
+
+- The Usage API is an unofficial endpoint with **strict rate limits** (~5 requests per token)
+- When rate-limited, the last cached result is displayed
+- The .app is not code-signed; `xattr -cr` is needed on first launch
+- **Claude Desktop app alone is not sufficient** — Claude Code CLI is required
+
+---
+
+# 한국어
+
+macOS 메뉴바에서 Claude Max 플랜의 토큰 사용량을 실시간으로 모니터링하는 앱입니다.
 
 ## 스크린샷
 
@@ -89,7 +226,6 @@ claude  # 실행 후 로그인
 ## 로그인 시 자동 실행
 
 ```bash
-# LaunchAgent 등록
 cp com.local.claude-monitor.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.local.claude-monitor.plist
 ```
@@ -106,18 +242,6 @@ rm ~/Library/LaunchAgents/com.local.claude-monitor.plist
 pip3 install pyinstaller
 pyinstaller --windowed --name "Claude Monitor" --osx-bundle-identifier com.local.claude-monitor claude_monitor.py
 # dist/Claude Monitor.app 생성
-```
-
-## 프로젝트 구조
-
-```
-├── claude_monitor.py      # 메인 메뉴바 앱 (rumps)
-├── token_provider.py      # macOS Keychain OAuth 토큰 관리 + 자동 갱신
-├── usage_api.py           # Anthropic Usage API 클라이언트
-├── stats_reader.py        # 로컬 ~/.claude/stats-cache.json 파서
-├── setup.py               # py2app 빌드 설정
-├── run.sh                 # 실행 스크립트
-└── com.local.claude-monitor.plist  # LaunchAgent (자동 시작)
 ```
 
 ## 동작 원리
