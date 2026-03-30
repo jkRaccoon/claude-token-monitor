@@ -82,10 +82,19 @@ class UsageResult:
         return max(vals) if vals else 0
 
 
+MAX_REQUESTS_PER_TOKEN = 5
+
+
 class UsageAPI:
     def __init__(self, token_provider):
         self._token_provider = token_provider
         self._last_result = None
+        self._request_count = 0
+
+    @property
+    def remaining_requests(self):
+        """현재 토큰으로 남은 API 호출 횟수."""
+        return max(0, MAX_REQUESTS_PER_TOKEN - self._request_count)
 
     def _parse_window(self, data):
         """개별 윈도우 데이터를 UsageData로 파싱."""
@@ -114,13 +123,16 @@ class UsageAPI:
         """Usage API를 호출하여 사용량 정보를 가져온다."""
         token = self._token_provider.get_token()
         resp = self._call_api(token)
+        self._request_count += 1
 
         # 429/401 시 토큰 갱신 후 재시도
         if resp.status_code in (401, 429):
             try:
                 self._token_provider.force_refresh()
+                self._request_count = 0
                 new_token = self._token_provider.get_token()
                 resp = self._call_api(new_token)
+                self._request_count += 1
             except Exception:
                 pass
 

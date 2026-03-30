@@ -12,7 +12,7 @@ from token_provider import TokenProvider
 from usage_api import UsageAPI
 from stats_reader import StatsReader
 
-POLL_INTERVAL = 60  # 초
+POLL_INTERVAL = 90  # 초
 CLAUDE_CODE_INSTALL_URL = "https://docs.anthropic.com/en/docs/claude-code"
 
 
@@ -116,6 +116,7 @@ class ClaudeMonitorApp(rumps.App):
 
         self.menu_7d_total = rumps.MenuItem("최근 7일 합계: --")
 
+        self.menu_api_remaining = rumps.MenuItem("API 잔여: 5/5")
         self.menu_status = rumps.MenuItem("마지막 갱신: --")
         self.menu_refresh = rumps.MenuItem("새로고침", callback=self.on_refresh)
         self.menu_quit = rumps.MenuItem("종료", callback=self.on_quit)
@@ -135,6 +136,7 @@ class ClaudeMonitorApp(rumps.App):
             rumps.separator,
             self.menu_7d_total,
             rumps.separator,
+            self.menu_api_remaining,
             self.menu_status,
             self.menu_refresh,
             self.menu_quit,
@@ -217,6 +219,11 @@ class ClaudeMonitorApp(rumps.App):
 
         total_7d = self.stats_reader.get_recent_days_tokens()
         self.menu_7d_total.title = f"최근 7일 합계: {format_number(total_7d)} tokens"
+
+        # API 잔여 횟수
+        remaining = self.usage_api.remaining_requests
+        from usage_api import MAX_REQUESTS_PER_TOKEN
+        self.menu_api_remaining.title = f"API 잔여: {remaining}/{MAX_REQUESTS_PER_TOKEN} (토큰 갱신까지)"
 
         # 상태
         from datetime import datetime
