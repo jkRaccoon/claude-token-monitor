@@ -21,6 +21,13 @@ def format_number(n):
     return f"{n:,}"
 
 
+def progress_bar(percent, width=15):
+    """텍스트 프로그레스 바 생성."""
+    filled = int(width * percent / 100)
+    bar = "▓" * filled + "░" * (width - filled)
+    return bar
+
+
 class ClaudeMonitorApp(rumps.App):
     def __init__(self):
         super().__init__("⏳", quit_button=None)
@@ -169,33 +176,31 @@ class ClaudeMonitorApp(rumps.App):
         # 메뉴바 타이틀
         five_h = result.five_hour
         seven_d = result.seven_day
-        if five_h and seven_d:
-            stale_mark = "⚡" if stale else ""
-            self.title = f"5H:{five_h.utilization:.0f}%({five_h.reset_short()}) 7D:{seven_d.utilization:.0f}%({seven_d.reset_short()}){stale_mark}"
-        elif five_h:
-            self.title = f"5H:{five_h.utilization:.0f}%({five_h.reset_short()})"
-        elif seven_d:
-            self.title = f"7D:{seven_d.utilization:.0f}%({seven_d.reset_short()})"
-
-        # 아이콘 (사용률에 따라 이모지)
-        worst = result.worst_utilization
-        if worst >= 80:
-            icon_prefix = "🔴"
-        elif worst >= 50:
-            icon_prefix = "🟡"
+        # 메뉴바 타이틀: 5시간 사용량만 표시
+        stale_mark = " ⚡" if stale else ""
+        if five_h:
+            worst = result.worst_utilization
+            if worst >= 80:
+                icon = "🔴"
+            elif worst >= 50:
+                icon = "🟡"
+            else:
+                icon = "🟢"
+            self.title = f"{icon} {five_h.utilization:.0f}% · {five_h.reset_short()}{stale_mark}"
         else:
-            icon_prefix = "🟢"
-        self.title = f"{icon_prefix} {self.title}"
+            self.title = f"⏳ --{stale_mark}"
 
         # 5시간 사용량 메뉴
         if five_h:
-            self.menu_5h_title.title = f"5시간 사용량: {five_h.utilization:.0f}%"
+            bar_5h = progress_bar(five_h.utilization)
+            self.menu_5h_title.title = f"5시간  {bar_5h} {five_h.utilization:.0f}%"
             self.menu_5h_reset.title = f"  리셋까지: {five_h.reset_description()}"
             self.menu_5h_time.title = f"  리셋 시각: {five_h.reset_time_local()}"
 
         # 7일 사용량 메뉴
         if seven_d:
-            self.menu_7d_title.title = f"7일 사용량: {seven_d.utilization:.0f}%"
+            bar_7d = progress_bar(seven_d.utilization)
+            self.menu_7d_title.title = f"7일    {bar_7d} {seven_d.utilization:.0f}%"
             self.menu_7d_reset.title = f"  리셋까지: {seven_d.reset_description()}"
             self.menu_7d_time.title = f"  리셋 시각: {seven_d.reset_time_local()}"
 
